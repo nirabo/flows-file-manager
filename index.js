@@ -51,10 +51,22 @@ function compare(a, b) {
  * @param {string} attribute attribute of the element to sanitize and store its result into x.config.normalizedLabel
  * @returns {object} disambiguated flowSet 
 */
+function getConfigNodeName(node, attribute) {
+  // Try in order of preference
+  return node.config?.[attribute] ||
+         node[attribute] ||
+         node.config?.site?.name ||
+         node.config?.botname ||  // telegram-bot
+         node.config?.name ||
+         node.name ||
+         node.type ||
+         node.id;
+}
+
 function disambiguate(flowSet, child, attribute) {
   flowSet.filenamesList = flowSet.filenamesList || [];
   flowSet[child].forEach((subelement) => {
-    let normalizedAttribute = normalizeString(subelement.config[attribute] || subelement[attribute] || subelement.config.site.name || subelement.type || subelement.id);
+    let normalizedAttribute = normalizeString(getConfigNodeName(subelement, attribute));
     if (flowSet.filenamesList.includes(normalizedAttribute)) {
       normalizedAttribute += `-${subelement.id}`;
     }
@@ -137,7 +149,12 @@ function moveElementInArray(arr, oldIndex, newIndex) {
 function reorderTabs(flowConfig, reference) {
   for (let i = reference.length - 1; i >= 0; i--) {
     const referenceId = reference[i];
-    moveElementInArray(flowConfig, flowConfig.findIndex(x => x.id === referenceId), 0)
+    const index = flowConfig.findIndex(x => x.id === referenceId);
+    if (index !== -1) {
+      moveElementInArray(flowConfig, index, 0);
+    } else {
+      console.warn(`[flows-file-manager] Tab "${referenceId}" not found in flowConfig during reordering`);
+    }
   }
   return flowConfig
 }
@@ -270,6 +287,8 @@ function constructTreeFilesFromFlowSet(flowSet, config, rootProjectPath = '.') {
     return
   }
 
+  cleanupObsoleteFiles(path.join(rootProjectPath, config.destinationFolder), config.fileFormat);
+
   // Create the TreeObject from the flowSet for an easier loop to create the files 
   const tree = constructTreeObjectFromFlowSet(flowSet)
 
@@ -360,6 +379,16 @@ function constructFlowSetFromTreeObject(tree, config) {
   return flowParser.parseFlow(reorderTabs(flowConfig, config.tabsOrder))
 }
 
+function hasSourceFiles(sourcePath) {
+  const directories = ['tabs', 'subflows', 'config-nodes'];
+  return directories.some(dir => {
+    const dirPath = path.join(sourcePath, dir);
+    if (!fs.existsSync(dirPath)) return false;
+    const files = fs.readdirSync(dirPath);
+    return files.length > 0;
+  });
+}
+
 
 /**
  * Returns a flowSet given a config and a rootPath (it will Read and Parse the content of all files)
@@ -367,6 +396,25 @@ function constructFlowSetFromTreeObject(tree, config) {
  * @param {string} rootProjectPath path of your Node-RED project subject to the current manager (default: current ".")
  * @returns {object} flowSet NRFlowSet defined in '@node-red/flow-parser'
 */
+function cleanupObsoleteFiles(sourcePath, expectedFormat) {
+  const obsoleteExtension = expectedFormat === 'yaml' ? '.json' : '.yaml';
+  const directories = ['tabs', 'subflows', 'config-nodes'];
+
+  directories.forEach(dir => {
+    const dirPath = path.join(sourcePath, dir);
+    if (!fs.existsSync(dirPath)) return;
+
+    const files = fs.readdirSync(dirPath);
+    files.forEach(file => {
+      if (file.endsWith(obsoleteExtension)) {
+        const filePath = path.join(dirPath, file);
+        console.log(`[flows-file-manager] Removing obsolete file: ${filePath}`);
+        fs.unlinkSync(filePath);
+      }
+    });
+  });
+}
+
 function constructFlowSetFromTreeFiles(config, rootProjectPath) {
   // Check the config
   if (!config.fileFormat || !config.destinationFolder || !Object.keys(config).includes('tabsOrder') || !config.monolithFilename) {
@@ -382,10 +430,22 @@ function constructFlowSetFromTreeFiles(config, rootProjectPath) {
     return
   }
 
+  const sourcePath = path.join(rootProjectPath || '.', config.destinationFolder);
+
+  if (!hasSourceFiles(sourcePath)) {
+    console.log('[flows-file-manager] No source files found, skipping reconstruction');
+    return { flows: [], subflows: [], configNodes: [] };
+  }
+
   let flowConfig = [];
 
   ['tabs', 'subflows', 'config-nodes'].forEach((nodeType) => {
-    fs.readdirSync(path.join(rootProjectPath || '.', config.destinationFolder, nodeType)).forEach((filename) => {
+    const dirPath = path.join(rootProjectPath || '.', config.destinationFolder, nodeType);
+    if (!fs.existsSync(dirPath)) {
+      console.warn(`[flows-file-manager] Directory not found: ${dirPath}, skipping...`);
+      return;
+    }
+    fs.readdirSync(dirPath).forEach((filename) => {
       if (filename.substring(filename.length - config.fileFormat.length) !== config.fileFormat) {
         console.log(`Unexpected file in the '${config.destinationFolder}' folder : ${filename}`);
         return
@@ -413,7 +473,11 @@ function constructFlowSetFromTreeFiles(config, rootProjectPath) {
       }
     })
   })
-  return flowParser.parseFlow(reorderTabs(flowConfig, config.tabsOrder))
+  const flowSet = flowParser.parseFlow(reorderTabs(flowConfig, config.tabsOrder));
+  disambiguate(flowSet, 'flows', 'label');
+  disambiguate(flowSet, 'subflows', 'name');
+  disambiguate(flowSet, 'configNodes', 'name');
+  return flowSet;
 }
 
 
@@ -426,4 +490,6 @@ module.exports = {
   constructMonolithObjectFromFlowSet,
   constructFlowSetFromTreeObject,
   constructFlowSetFromTreeFiles,
+  disambiguate,
+  reorderTabs,
 }
