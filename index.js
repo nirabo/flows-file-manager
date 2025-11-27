@@ -54,7 +54,7 @@ function compare(a, b) {
 function disambiguate(flowSet, child, attribute) {
   flowSet.filenamesList = flowSet.filenamesList || [];
   flowSet[child].forEach((subelement) => {
-    let normalizedAttribute = normalizeString(subelement.config[attribute] || subelement[attribute] || subelement.config.site.name || subelement.type || subelement.id);
+    let normalizedAttribute = normalizeString(subelement.config[attribute] || subelement[attribute] || subelement.config.site?.name || subelement.type || subelement.id);
     if (flowSet.filenamesList.includes(normalizedAttribute)) {
       normalizedAttribute += `-${subelement.id}`;
     }
