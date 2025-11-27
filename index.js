@@ -289,6 +289,11 @@ function constructTreeFilesFromFlowSet(flowSet, config, rootProjectPath = '.') {
 
   cleanupObsoleteFiles(path.join(rootProjectPath, config.destinationFolder), config.fileFormat);
 
+  // Disambiguate the flowSet to create the normalizedLabels
+  disambiguate(flowSet, 'flows', 'label');
+  disambiguate(flowSet, 'subflows', 'name');
+  disambiguate(flowSet, 'configNodes', 'name');
+
   // Create the TreeObject from the flowSet for an easier loop to create the files 
   const tree = constructTreeObjectFromFlowSet(flowSet)
 
@@ -474,9 +479,6 @@ function constructFlowSetFromTreeFiles(config, rootProjectPath) {
     })
   })
   const flowSet = flowParser.parseFlow(reorderTabs(flowConfig, config.tabsOrder));
-  disambiguate(flowSet, 'flows', 'label');
-  disambiguate(flowSet, 'subflows', 'name');
-  disambiguate(flowSet, 'configNodes', 'name');
   return flowSet;
 }
 
@@ -490,6 +492,11 @@ module.exports = {
   constructMonolithObjectFromFlowSet,
   constructFlowSetFromTreeObject,
   constructFlowSetFromTreeFiles,
-  disambiguate,
-  reorderTabs,
+  _internal: {
+    disambiguate,
+    reorderTabs,
+    getConfigNodeName,
+    normalizeString,
+    moveElementInArray,
+  }
 }

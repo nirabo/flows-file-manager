@@ -1,7 +1,9 @@
 const {
-    disambiguate,
-    reorderTabs,
     constructFlowSetFromTreeFiles,
+    _internal: {
+        disambiguate,
+        reorderTabs
+    },
 } = require('./index');
 const fs = require('fs');
 jest.mock('fs');

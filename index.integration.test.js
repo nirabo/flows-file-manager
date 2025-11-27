@@ -47,6 +47,8 @@ describe('Integration Tests', () => {
             constructTreeFilesFromFlowSet(flowSet, finalConfig, testProjectDir);
             expect(fs.existsSync(path.join(srcDir, 'tabs/test-tab.json'))).toBe(true);
             expect(fs.existsSync(path.join(srcDir, 'tabs/test-tab.yaml'))).toBe(false);
+            const newFileContent = JSON.parse(fs.readFileSync(path.join(srcDir, 'tabs/test-tab.json')));
+            expect(newFileContent[0].label).toBe('Test Tab');
         });
         it('should handle empty src directory when format is specified', () => {
             const config = {
